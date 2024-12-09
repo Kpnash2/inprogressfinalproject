@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Match</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f4f4f9;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      margin-top: 20px;
+      color: #333;
+    }
+    .chessboard {
+      width: 480px;
+      height: 480px;
+      margin: 20px auto;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      border: 2px solid #333;
+    }
+    .square {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 30px;
+      font-weight: bold;
+    }
+    .square.light {
+      background-color: #f0d9b5;
+    }
+    .square.dark {
+      background-color: #b58863;
+    }
+    .piece {
+      cursor: pointer;
+    }
+    .highlight {
+      outline: 2px solid yellow;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chess Match</h1>
+  <div id="chessboard" class="chessboard"></div>
+
+  <script>
+    const board = document.getElementById('chessboard');
+    const pieces = {
+      black: ['♜', '♞', '♝', '♛', '♚', '♝', '♞', '♜', '♟', '♟', '♟', '♟', '♟', '♟', '♟', '♟'],
+      white: ['♙', '♙', '♙', '♙', '♙', '♙', '♙', '♙', '♖', '♘', '♗', '♕', '♔', '♗', '♘', '♖']
+    };
+    const chessState = new Array(64).fill(null); // Tracks the state of the board
+    let selectedPiece = null; // Currently selected piece
+    let currentPlayer = 'white'; // Alternates between 'white' and 'black'
+
+    // Initialize the board
+    function createBoard() {
+      for (let i = 0; i < 64; i++) {
+        const square = document.createElement('div');
+        square.classList.add('square', (Math.floor(i / 8) + i) % 2 === 0 ? 'dark' : 'light');
+        square.dataset.index = i;
+        board.appendChild(square);
+
+        if (i < 16) {
+          addPiece(square, pieces.black[i], 'black');
+        } else if (i >= 48) {
+          addPiece(square, pieces.white[i - 48], 'white');
+        }
+      }
+    }
+
+    function addPiece(square, piece, color) {
+      if (piece) {
+        const pieceEl = document.createElement('span');
+        pieceEl.textContent = piece;
+        pieceEl.classList.add('piece');
+        pieceEl.dataset.color = color;
+        pieceEl.dataset.type = getPieceType(piece);
+        square.appendChild(pieceEl);
+        chessState[square.dataset.index] = { color, type: pieceEl.dataset.type };
+      }
+    }
+
+    function getPieceType(piece) {
+      switch (piece) {
+        case '♜': case '♖': return 'rook';
+        case '♞': case '♘': return 'knight';
+        case '♝': case '♗': return 'bishop';
+        case '♛': case '♕': return 'queen';
+        case '♚': case '♔': return 'king';
+        case '♟': case '♙': return 'pawn';
+        default: return null;
+      }
+    }
+
+    // Handle piece selection and movement
+    board.addEventListener('click', (e) => {
+      const target = e.target.closest('.square');
+      if (!target) return;
+
+      const index = parseInt(target.dataset.index, 10);
+      const piece = target.querySelector('.piece');
+
+      if (selectedPiece) {
+        // Move the piece if valid
+        if (isValidMove(selectedPiece, index)) {
+          movePiece(selectedPiece, target);
+          switchPlayer();
+        }
+        clearHighlights();
+        selectedPiece = null;
+      } else if (piece && piece.dataset.color === currentPlayer) {
+        // Select a piece
+        selectedPiece = piece;
+        highlightValidMoves(piece, index);
+      }
+    });
+
+    function isValidMove(piece, targetIndex) {
+      const pieceType = piece.dataset.type;
+      const startIndex = parseInt(piece.parentNode.dataset.index, 10);
+      const targetState = chessState[targetIndex];
+
+      if (targetState && targetState.color === currentPlayer) return false;
+
+      switch (pieceType) {
+        case 'pawn':
+          return isValidPawnMove(startIndex, targetIndex, piece.dataset.color);
+        case 'rook':
+          return isValidRookMove(startIndex, targetIndex);
+        case 'knight':
+          return isValidKnightMove(startIndex, targetIndex);
+        case 'bishop':
+          return isValidBishopMove(startIndex, targetIndex);
+        case 'queen':
+          return isValidQueenMove(startIndex, targetIndex);
+        case 'king':
+          return isValidKingMove(startIndex, targetIndex);
+        default:
+          return false;
+      }
+    }
+
+    function isValidPawnMove(start, target, color) {
+      const direction = color === 'white' ? -1 : 1;
+      const startRow = Math.floor(start / 8);
+      const targetRow = Math.floor(target / 8);
+      const isStartRow = (color === 'white' && startRow === 6) || (color === 'black' && startRow === 1);
+
+      // Standard move
+      if (target === start + direction * 8 && !chessState[target]) return true;
+
+      // Double move from starting position
+      if (isStartRow && target === start + direction * 16 && !chessState[start + direction * 8] && !chessState[target]) {
+        return true;
+      }
+
+      // Capturing move
+      if (
+        (target === start + direction * 7 || target === start + direction * 9) &&
+        chessState[target] &&
+        chessState[target].color !== color
+      ) {
+        return true;
+      }
+
+      return false;
+    }
+
+    function isValidRookMove(start, target) {
+      return isValidStraightMove(start, target);
+    }
+
+    function isValidBishopMove(start, target) {
+      return isValidDiagonalMove(start, target);
+    }
+
+    function isValidQueenMove(start, target) {
+      return isValidStraightMove(start, target) || isValidDiagonalMove(start, target);
+    }
+
+    function isValidKnightMove(start, target) {
+      const dx = Math.abs((target % 8) - (start % 8));
+      const dy = Math.abs(Math.floor(target / 8) - Math.floor(start / 8));
+      return (dx === 2 && dy === 1) || (dx === 1 && dy === 2);
+    }
+
+    function isValidKingMove(start, target) {
+      const dx = Math.abs((target % 8) - (start % 8));
+      const dy = Math.abs(Math.floor(target / 8) - Math.floor(start / 8));
+      return dx <= 1 && dy <= 1;
+    }
+
+    function isValidStraightMove(start, target) {
+      const dx = target % 8 - start % 8;
+      const dy = Math.floor(target / 8) - Math.floor(start / 8);
+
+      if (dx !== 0 && dy !== 0) return false;
+
+      const step = dx !== 0 ? (dx > 0 ? 1 : -1) : (dy > 0 ? 8 : -8);
+      for (let i = start + step; i !== target; i += step) {
+        if (chessState[i]) return false;
+      }
+
+      return true;
+    }
+
+    function isValidDiagonalMove(start, target) {
+      const dx = Math.abs((target % 8) - (start % 8));
+      const dy = Math.abs(Math.floor(target / 8) - Math.floor(start / 8));
+
+      if (dx !== dy) return false;
+
+      const step = (target > start ? 1 : -1) * (dx > 0 ? 9 : 7);
+      for (let i = start + step; i !== target; i += step) {
+        if (chessState[i]) return false;
+      }
+
+      return true;
+    }
+
+    function movePiece(piece, targetSquare) {
+      const startIndex = parseInt(piece.parentNode.dataset.index, 10);
+      const targetIndex = parseInt(targetSquare.dataset.index, 10);
+
+      chessState[startIndex] = null;
+      chessState[targetIndex] = { color: piece.dataset.color, type: piece.dataset.type };
+
+      targetSquare.innerHTML = '';
+      targetSquare.appendChild(piece);
+    }
+
+    function highlightValidMoves(piece, startIndex) {
+      clearHighlights();
+
+      for (let i = 0; i < 64; i++) {
+        if (isValidMove(piece, i)) {
+          const square = document.querySelector(`.square[data-index="${i}"]`);
+          square.classList.add('highlight');
+        }
+      }
+    }
+
+    function clearHighlights() {
+      document.querySelectorAll('.highlight').forEach((square) => square.classList.remove('highlight'));
+    }
+
+    function switchPlayer() {
+      currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
+    }
+
+    createBoard();
+  </script>
+</body>
+</html>
